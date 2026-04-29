@@ -12,7 +12,10 @@ All configuration is done via environment variables with the `MATTERMOST_` prefi
 
 | Variable | Description |
 |----------|-------------|
-| `MATTERMOST_TOKEN` | Bot or personal access token. MATTERMOST_TOKEN is required only when per-client token authentication (MATTERMOST_ALLOW_HTTP_CLIENT_TOKENS) is not enabled. |
+| `MATTERMOST_TOKEN` | Bot or personal access token. Required only when `MATTERMOST_AUTH_MODE=static_token`. |
+| `MATTERMOST_OAUTH_CLIENT_ID` | Mattermost OAuth App client ID. Required when `MATTERMOST_AUTH_MODE=oauth_proxy`. |
+| `MATTERMOST_OAUTH_CLIENT_SECRET` | Mattermost OAuth App secret. Required for confidential OAuth Apps. |
+| `MATTERMOST_OAUTH_MCP_PUBLIC_URL` | Public base URL of this MCP server. Required when `MATTERMOST_AUTH_MODE=oauth_proxy`. |
 
 ## Optional Variables
 
@@ -24,7 +27,12 @@ All configuration is done via environment variables with the `MATTERMOST_` prefi
 | `MATTERMOST_LOG_LEVEL` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | `MATTERMOST_LOG_FORMAT` | json | Log format: `json` for production, `text` for development |
 | `MATTERMOST_API_VERSION` | v4 | Mattermost API version |
-| `MATTERMOST_ALLOW_HTTP_CLIENT_TOKENS` | false | Allow HTTP clients to authenticate with their own Mattermost tokens |
+| `MATTERMOST_AUTH_MODE` | static_token | Authentication mode: `static_token`, `client_token`, or `oauth_proxy` |
+| `MATTERMOST_ALLOW_HTTP_CLIENT_TOKENS` | false | Deprecated alias for `MATTERMOST_AUTH_MODE=client_token` |
+| `MATTERMOST_OAUTH_CLIENT_TYPE` | confidential | Mattermost OAuth App type: `public` or `confidential` |
+| `MATTERMOST_OAUTH_MATTERMOST_PUBLIC_URL` | `MATTERMOST_URL` | Browser-facing Mattermost URL for OAuth redirects |
+| `MATTERMOST_OAUTH_CALLBACK_PATH` | `/oauth/callback/mm` | Callback path registered in the Mattermost OAuth App |
+| `MATTERMOST_OAUTH_JWT_SIGNING_KEY` | — | FastMCP JWT signing key. Required for public OAuth Apps, optional for confidential OAuth Apps. |
 
 ## Environment File
 
@@ -37,28 +45,49 @@ MATTERMOST_TIMEOUT=60
 MATTERMOST_LOG_LEVEL=DEBUG
 ```
 
-## Per-Client Token Authentication
+## Authentication Modes
 
-By default, the server uses the `MATTERMOST_TOKEN` environment variable for all API requests. When `MATTERMOST_ALLOW_HTTP_CLIENT_TOKENS` is set to `true`, HTTP clients (e.g., over SSE transport) can pass their own Mattermost token via the `Authorization: Bearer <token>` header.
+`MATTERMOST_AUTH_MODE` selects one authentication strategy per server process.
 
-**How it works:**
+### `static_token`
 
-1. The client sends a bearer token in the `Authorization` header
-2. The server validates the token by calling `GET /api/v4/users/me` on the Mattermost server
-3. If valid, the client's token is used for all subsequent API requests in that session
-4. If invalid, the server responds with `401 Unauthorized`
+Default mode. The server uses `MATTERMOST_TOKEN` for every Mattermost API request.
+Use this for stdio, bot accounts, and single-user deployments.
 
-This is useful in multi-user environments where each user should act under their own Mattermost identity rather than a shared bot account.
+### `client_token`
 
-!!! note
-    This feature only applies to HTTP-based transports (SSE, StreamableHTTP). When using stdio transport (e.g., Claude Desktop), the server always uses `MATTERMOST_TOKEN`.
+HTTP clients send their own Mattermost token in `Authorization: Bearer <token>`.
+The server validates it through `GET /api/v4/users/me` and then uses that token for
+Mattermost API calls.
+
+`MATTERMOST_ALLOW_HTTP_CLIENT_TOKENS=true` is a deprecated alias for this mode.
+
+### `oauth_proxy`
+
+Remote MCP clients authenticate with the MCP server through the standard MCP OAuth
+flow. FastMCP `OAuthProxy` redirects the user to Mattermost OAuth, Mattermost performs
+login through its configured SSO provider such as Keycloak, and the MCP server stores
+the resulting Mattermost user token as an upstream token.
+
+Mattermost OAuth App settings:
+
+| Setting | Public PoC mode | Confidential production mode |
+|---------|-----------------|------------------------------|
+| Is Trusted | Yes | Yes |
+| Is Public Client | Yes | No |
+| Client Secret | Empty | Required |
+| Callback URL | `{MATTERMOST_OAUTH_MCP_PUBLIC_URL}/oauth/callback/mm` | `{MATTERMOST_OAUTH_MCP_PUBLIC_URL}/oauth/callback/mm` |
+| PKCE | S256 | S256 |
+
+The MCP server does not register directly in Keycloak. Keycloak is used by Mattermost
+for SSO login, and Mattermost issues the OAuth token that the MCP server uses for API
+calls.
 
 !!! warning "Security Considerations"
-    When enabled, the MCP server forwards any valid Mattermost token to the API.
-    This means any user who can reach the MCP server's HTTP endpoint and has a
-    valid Mattermost account can execute MCP tools under their own identity.
-    Ensure the MCP server is protected by network-level access controls
-    (firewall, VPN, reverse proxy with authentication) in production deployments.
+    In `client_token` and `oauth_proxy` modes, any user who can reach the MCP server's
+    HTTP endpoint and has a valid Mattermost account can execute MCP tools under their
+    own identity. Protect the MCP server with network-level access controls such as a
+    firewall, VPN, or trusted reverse proxy.
 
 ## Token Permissions
 

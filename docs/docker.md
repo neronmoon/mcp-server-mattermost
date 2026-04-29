@@ -63,7 +63,14 @@ curl http://localhost:8000/health
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `MATTERMOST_URL` | Yes | — | Mattermost server URL |
-| `MATTERMOST_TOKEN` | Yes | — | Bot or personal access token |
+| `MATTERMOST_AUTH_MODE` | No | `static_token` | Authentication mode: `static_token`, `client_token`, or `oauth_proxy` |
+| `MATTERMOST_TOKEN` | Conditional | — | Required for `static_token` mode |
+| `MATTERMOST_ALLOW_HTTP_CLIENT_TOKENS` | No | false | Deprecated alias for `MATTERMOST_AUTH_MODE=client_token` |
+| `MATTERMOST_OAUTH_CLIENT_ID` | Conditional | — | Mattermost OAuth App client ID for `oauth_proxy` |
+| `MATTERMOST_OAUTH_CLIENT_TYPE` | Conditional | `confidential` | `public` or `confidential` OAuth App |
+| `MATTERMOST_OAUTH_CLIENT_SECRET` | Conditional | — | Required for confidential OAuth Apps |
+| `MATTERMOST_OAUTH_MCP_PUBLIC_URL` | Conditional | — | Public base URL of this MCP server |
+| `MATTERMOST_OAUTH_MATTERMOST_PUBLIC_URL` | No | `MATTERMOST_URL` | Browser-facing Mattermost URL |
 | `MATTERMOST_TIMEOUT` | No | 30 | Request timeout in seconds |
 | `MATTERMOST_MAX_RETRIES` | No | 3 | Max retry attempts |
 | `MATTERMOST_VERIFY_SSL` | No | true | Verify SSL certificates |
