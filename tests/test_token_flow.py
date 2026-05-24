@@ -120,6 +120,7 @@ class TestOAuthProxyDiscovery:
                 "MATTERMOST_OAUTH_CLIENT_ID": "mm-client",
                 "MATTERMOST_OAUTH_JWT_SIGNING_KEY": "signing-key-1234567890",
                 "MATTERMOST_OAUTH_MCP_PUBLIC_URL": "http://localhost:8000",
+                "MATTERMOST_OAUTH_MATTERMOST_PUBLIC_URL": "https://mattermost.example.com",
                 "MATTERMOST_OAUTH_REQUIRE_CONSENT": "false",
             },
             clear=True,

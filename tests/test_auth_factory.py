@@ -33,6 +33,7 @@ def test_build_auth_provider_oauth_proxy_delegates_to_builder() -> None:
         oauth_client_id="mm-client",
         oauth_jwt_signing_key="signing-key-1234567890",
         oauth_mcp_public_url="http://localhost:8000",
+        oauth_mattermost_public_url="https://mattermost.example.com",
     )
 
     sentinel = object()

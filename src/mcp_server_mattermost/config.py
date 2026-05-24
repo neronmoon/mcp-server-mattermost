@@ -2,6 +2,7 @@
 
 from enum import Enum
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,7 +23,13 @@ class OAuthClientType(str, Enum):
     CONFIDENTIAL = "confidential"
 
 
-_LOCALHOST_PREFIXES = ("http://localhost", "http://127.0.0.1", "http://[::1]")
+_LOCALHOST_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _uses_https_or_localhost(url: str) -> bool:
+    """Return whether URL is HTTPS or points at localhost."""
+    parts = urlsplit(url)
+    return parts.scheme == "https" or parts.hostname in _LOCALHOST_HOSTS
 
 
 class Settings(BaseSettings):
@@ -168,10 +175,15 @@ class Settings(BaseSettings):
         ):
             msg = "MATTERMOST_OAUTH_CLIENT_SECRET is required for confidential OAuth clients"
             raise ValueError(msg)
-        if not self.oauth_mcp_public_url.startswith("https://") and not self.oauth_mcp_public_url.startswith(
-            _LOCALHOST_PREFIXES
-        ):
+        if not _uses_https_or_localhost(self.oauth_mcp_public_url):
             msg = "MATTERMOST_OAUTH_MCP_PUBLIC_URL must use HTTPS unless it is localhost"
+            raise ValueError(msg)
+        browser_facing_mattermost_url = self.oauth_mattermost_public_url or self.url
+        if not _uses_https_or_localhost(browser_facing_mattermost_url):
+            msg = (
+                "Browser-facing Mattermost URL must use HTTPS unless it is localhost. "
+                "Set MATTERMOST_OAUTH_MATTERMOST_PUBLIC_URL to an HTTPS URL or use HTTPS for MATTERMOST_URL."
+            )
             raise ValueError(msg)
 
 

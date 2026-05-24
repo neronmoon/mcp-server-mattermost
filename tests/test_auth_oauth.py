@@ -3,6 +3,7 @@
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 from fastmcp.server.auth import OAuthProxy
 
 
@@ -91,6 +92,7 @@ def test_build_public_oauth_proxy_passes_explicit_signing_key() -> None:
         oauth_client_id="mm-client",
         oauth_jwt_signing_key="signing-key-1234567890",
         oauth_mcp_public_url="http://localhost:8000",
+        oauth_mattermost_public_url="https://mattermost.example.com",
     )
 
     with patch("mcp_server_mattermost.auth_oauth.MattermostOAuthProxy") as proxy_cls:
@@ -129,3 +131,74 @@ def test_mattermost_oauth_proxy_does_not_forward_resource_to_upstream_authorize(
     assert query["client_id"] == ["mm-client"]
     assert query["redirect_uri"] == ["https://mcp.example.com/mattermost/oauth/callback/mm"]
     assert "resource" not in query
+
+
+def test_mattermost_oauth_proxy_strips_only_resource_from_parent_authorize_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mattermost-specific override should preserve upstream FastMCP authorize behavior."""
+    from mcp_server_mattermost.auth_oauth import build_mattermost_oauth_proxy
+    from mcp_server_mattermost.config import Settings
+
+    settings = Settings(
+        url="https://mattermost.internal",
+        auth_mode="oauth_proxy",
+        oauth_client_type="public",
+        oauth_client_id="mm-client",
+        oauth_jwt_signing_key="signing-key-1234567890",
+        oauth_mcp_public_url="https://mcp.example.com",
+        oauth_mattermost_public_url="https://mm.example.com",
+    )
+    auth = build_mattermost_oauth_proxy(settings)
+
+    def build_parent_url(self: OAuthProxy, txn_id: str, transaction: dict[str, object]) -> str:
+        assert txn_id == "txn-id"
+        assert transaction["resource"] == "https://mcp.example.com/mcp"
+        return (
+            "https://mm.example.com/oauth/authorize?"
+            "client_id=mm-client&resource=https%3A%2F%2Fmcp.example.com%2Fmcp&parent_param=kept"
+        )
+
+    monkeypatch.setattr(OAuthProxy, "_build_upstream_authorize_url", build_parent_url)
+
+    upstream_url = auth._build_upstream_authorize_url("txn-id", {"resource": "https://mcp.example.com/mcp"})
+    query = parse_qs(urlparse(upstream_url).query)
+
+    assert query["client_id"] == ["mm-client"]
+    assert query["parent_param"] == ["kept"]
+    assert "resource" not in query
+
+
+@pytest.mark.asyncio
+async def test_mattermost_oauth_proxy_closes_mattermost_verifier() -> None:
+    """OAuth proxy owns the Mattermost verifier and closes it during server shutdown."""
+    from fastmcp.server.auth import AccessToken
+
+    from mcp_server_mattermost.auth import MattermostTokenVerifier
+    from mcp_server_mattermost.auth_oauth import MattermostOAuthProxy
+
+    class TrackingVerifier(MattermostTokenVerifier):
+        def __init__(self) -> None:
+            super().__init__()
+            self.closed = False
+
+        async def verify_token(self, token: str) -> AccessToken | None:
+            return None
+
+        async def close(self) -> None:
+            self.closed = True
+            await super().close()
+
+    verifier = TrackingVerifier()
+    auth = MattermostOAuthProxy(
+        upstream_authorization_endpoint="https://mm.example.com/oauth/authorize",
+        upstream_token_endpoint="https://mm.example.com/oauth/access_token",
+        upstream_client_id="mm-client",
+        upstream_client_secret="",
+        mattermost_verifier=verifier,
+        base_url="https://mcp.example.com",
+        token_endpoint_auth_method="none",
+        jwt_signing_key="signing-key-1234567890",
+    )
+
+    await auth.close()
+
+    assert verifier.closed is True

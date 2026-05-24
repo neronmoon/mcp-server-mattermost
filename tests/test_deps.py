@@ -88,6 +88,7 @@ class TestGetClient:
         monkeypatch.setenv("MATTERMOST_OAUTH_CLIENT_ID", "mm-client")
         monkeypatch.setenv("MATTERMOST_OAUTH_JWT_SIGNING_KEY", "signing-key-1234567890")
         monkeypatch.setenv("MATTERMOST_OAUTH_MCP_PUBLIC_URL", "http://localhost:8000")
+        monkeypatch.setenv("MATTERMOST_OAUTH_MATTERMOST_PUBLIC_URL", "https://mattermost.example.com")
 
         mock_token = AccessToken(
             token="fastmcp-jwt",

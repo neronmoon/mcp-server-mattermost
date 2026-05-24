@@ -99,8 +99,6 @@ class MattermostTokenVerifier(TokenVerifier):
                 claims={
                     "mattermost_token": token,
                     "mattermost_user_id": user_id,
-                    "mattermost_username": user.get("username"),
-                    "mattermost_email": user.get("email"),
                 },
             )
             self._cache[cache_key] = access_token

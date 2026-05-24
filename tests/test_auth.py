@@ -29,8 +29,8 @@ class TestMattermostTokenVerifier:
         assert result.claims["mattermost_token"] == "valid-token-abc"
 
     @pytest.mark.asyncio
-    async def test_valid_token_includes_user_claims(self, mock_settings: None) -> None:
-        """Valid Mattermost token includes useful Mattermost user claims."""
+    async def test_valid_token_includes_minimal_user_claims(self, mock_settings: None) -> None:
+        """Valid Mattermost token exposes only claims needed by production code."""
         from mcp_server_mattermost.auth import MattermostTokenVerifier
         from mcp_server_mattermost.config import get_settings
 
@@ -47,10 +47,7 @@ class TestMattermostTokenVerifier:
             result = await verifier.verify_token("valid-token-abc")
 
         assert result is not None
-        assert result.claims["mattermost_token"] == "valid-token-abc"
-        assert result.claims["mattermost_user_id"] == "user123"
-        assert result.claims["mattermost_username"] == "alice"
-        assert result.claims["mattermost_email"] == "alice@example.com"
+        assert result.claims == {"mattermost_token": "valid-token-abc", "mattermost_user_id": "user123"}
 
     @pytest.mark.asyncio
     async def test_invalid_token_returns_none(self, mock_settings: None) -> None:
