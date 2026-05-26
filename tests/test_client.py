@@ -1151,6 +1151,31 @@ class TestMattermostClientChannelsAPI:
 
         assert result == {"channel_id": "ch123", "user_id": "user456"}
 
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_view_channel_marks_channel_viewed(self, mock_settings):
+        """view_channel POSTs /channels/members/me/view with {"channel_id": ...}."""
+        import json
+
+        from mcp_server_mattermost.config import get_settings
+
+        settings = get_settings()
+        client = MattermostClient(settings)
+
+        route = respx.post(
+            "https://test.mattermost.com/api/v4/channels/members/me/view",
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={"status": "OK", "last_viewed_at_times": {"ch1": 1716620000000}},
+            )
+        )
+        async with client.lifespan():
+            await client.view_channel(channel_id="ch1")
+        assert route.called
+        body = json.loads(route.calls[0].request.content)
+        assert body == {"channel_id": "ch1"}
+
 
 class TestMattermostClientMessagesAPI:
     """Test Messages/Posts API methods."""
@@ -1176,6 +1201,82 @@ class TestMattermostClientMessagesAPI:
 
         assert "posts" in result
         assert "post1" in result["posts"]
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_get_posts_since_passes_since_param(self, mock_settings):
+        """get_posts_since must call /channels/{id}/posts with the since query param."""
+        from mcp_server_mattermost.config import get_settings
+
+        settings = get_settings()
+        client = MattermostClient(settings)
+
+        route = respx.get("https://test.mattermost.com/api/v4/channels/ch1/posts").mock(
+            return_value=httpx.Response(200, json={"order": [], "posts": {}})
+        )
+        async with client.lifespan():
+            await client.get_posts_since(channel_id="ch1", since=1716620000000)
+        assert route.called
+        assert route.calls[0].request.url.params["since"] == "1716620000000"
+        assert "page" not in route.calls[0].request.url.params
+        assert "per_page" not in route.calls[0].request.url.params
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_get_posts_since_with_collapsed_threads(self, mock_settings):
+        """collapsed_threads=True must propagate to query params."""
+        from mcp_server_mattermost.config import get_settings
+
+        settings = get_settings()
+        client = MattermostClient(settings)
+
+        route = respx.get("https://test.mattermost.com/api/v4/channels/ch1/posts").mock(
+            return_value=httpx.Response(200, json={"order": [], "posts": {}})
+        )
+        async with client.lifespan():
+            await client.get_posts_since(channel_id="ch1", since=1716620000000, collapsed_threads=True)
+        assert route.calls[0].request.url.params["collapsedThreads"] == "true"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_get_channel_posts_unread_passes_limits(self, mock_settings):
+        """get_channel_posts_unread must call /users/me/channels/{id}/posts/unread with limits."""
+        from mcp_server_mattermost.config import get_settings
+
+        settings = get_settings()
+        client = MattermostClient(settings)
+        route = respx.get("https://test.mattermost.com/api/v4/users/me/channels/ch1/posts/unread").mock(
+            return_value=httpx.Response(200, json={"order": [], "posts": {}})
+        )
+        async with client.lifespan():
+            await client.get_channel_posts_unread(
+                channel_id="ch1",
+                limit_before=10,
+                limit_after=100,
+            )
+        assert route.called
+        assert route.calls[0].request.url.params["limit_before"] == "10"
+        assert route.calls[0].request.url.params["limit_after"] == "100"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_get_channel_posts_unread_with_collapsed_threads(self, mock_settings):
+        """collapsed_threads=True must propagate as collapsedThreads query param."""
+        from mcp_server_mattermost.config import get_settings
+
+        settings = get_settings()
+        client = MattermostClient(settings)
+        route = respx.get("https://test.mattermost.com/api/v4/users/me/channels/ch1/posts/unread").mock(
+            return_value=httpx.Response(200, json={"order": [], "posts": {}})
+        )
+        async with client.lifespan():
+            await client.get_channel_posts_unread(
+                channel_id="ch1",
+                limit_before=0,
+                limit_after=60,
+                collapsed_threads=True,
+            )
+        assert route.calls[0].request.url.params["collapsedThreads"] == "true"
 
     @pytest.mark.asyncio
     @respx.mock

@@ -73,14 +73,23 @@ async def list_my_channels(
 ) -> list[ChannelWithUnreads]:
     """List channels you are a member of in a team.
 
-    Returns your channels with unread counters for the authenticated user. Two
-    counter pairs are provided: unread_msg_count / mention_count count thread
-    replies too (the channel badge with Collapsed Reply Threads off), while
-    unread_msg_count_root / mention_count_root count only root posts (the badge
-    with Collapsed Reply Threads on). Channels without a membership record
-    report 0 for all four counters.
-    Use channel_types to narrow results: ["O", "P"] for workspace channels
-    without DMs, or ["D"] for direct messages only.
+    Returns your channels with unread counters and the read marker for the authenticated
+    user. Two counter pairs are provided:
+
+    - ``unread_msg_count`` / ``mention_count`` count thread replies too (the channel
+      badge with Collapsed Reply Threads off — the team default).
+    - ``unread_msg_count_root`` / ``mention_count_root`` count only root posts (the
+      badge with Collapsed Reply Threads on).
+
+    ``last_viewed_at`` is the user's read marker for the channel. Pass it as
+    ``get_channel_messages(channel_id, since=last_viewed_at)`` for incremental sync, or
+    use ``get_channel_messages(channel_id, unread_only=True)`` for the unread window
+    (preferred — deterministic and edit-noise-free).
+
+    Channels without a membership record report 0 for all counters and ``last_viewed_at``.
+
+    Use channel_types to narrow results: ["O", "P"] for workspace channels without DMs,
+    or ["D"] for direct messages only.
     Use only_unread=True to get only channels with unread messages.
     For discovering public channels you haven't joined yet, use list_public_channels.
     """
@@ -201,6 +210,28 @@ async def leave_channel(
     Can rejoin public channels later with join_channel.
     """
     await client.leave_channel(channel_id=channel_id)
+
+
+@tool(
+    annotations={"destructiveHint": False},
+    tags={ToolTag.MATTERMOST, ToolTag.CHANNEL},
+    meta={"capability": Capability.WRITE},
+)
+async def mark_channel_viewed(
+    channel_id: ChannelId,
+    client: MattermostClient = Depends(get_client),  # noqa: B008
+) -> None:
+    """Mark a channel as read for the authenticated user.
+
+    Clears unread counters and advances ``last_viewed_at``. Use when the user
+    asks to clear unreads, when a bot has processed
+    ``get_channel_messages(unread_only=True)`` and needs to advance read state
+    for the next poll, or as a one-shot bootstrap on a channel with
+    ``last_viewed_at == 0`` so ``unread_only`` queries return posts.
+
+    Do NOT call on accounts shared with humans — it clears their UI badge.
+    """
+    await client.view_channel(channel_id=channel_id)
 
 
 @tool(
