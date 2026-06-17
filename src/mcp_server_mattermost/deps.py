@@ -10,6 +10,17 @@ from .config import AuthMode, get_settings
 from .exceptions import AuthenticationError
 
 
+def resolve_team_id(team_id: str | None) -> str:
+    """Return explicit team_id or MATTERMOST_DEFAULT_TEAM_ID."""
+    if team_id is not None:
+        return team_id
+    default_team_id = get_settings().default_team_id
+    if default_team_id:
+        return default_team_id
+    msg = "team_id is required; set MATTERMOST_DEFAULT_TEAM_ID to use a default team"
+    raise ValueError(msg)
+
+
 def _get_mattermost_token_from_auth_context() -> str:
     """Return Mattermost token from FastMCP auth context.
 

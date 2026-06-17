@@ -7,7 +7,7 @@ from fastmcp.tools import tool
 from pydantic import Field
 
 from mcp_server_mattermost.client import MattermostClient
-from mcp_server_mattermost.deps import get_client
+from mcp_server_mattermost.deps import get_client, resolve_team_id
 from mcp_server_mattermost.enums import Capability, ToolTag
 from mcp_server_mattermost.models import (
     Channel,
@@ -16,7 +16,7 @@ from mcp_server_mattermost.models import (
     ChannelName,
     ChannelType,
     ChannelWithUnreads,
-    TeamId,
+    OptionalTeamId,
     UserId,
 )
 
@@ -27,7 +27,7 @@ from mcp_server_mattermost.models import (
     meta={"capability": Capability.READ},
 )
 async def list_public_channels(
-    team_id: TeamId,
+    team_id: OptionalTeamId = None,
     page: Annotated[int, Field(ge=0, description="Page number (0-indexed)")] = 0,
     per_page: Annotated[int, Field(ge=1, le=200, description="Results per page")] = 60,
     client: MattermostClient = Depends(get_client),  # noqa: B008
@@ -40,7 +40,7 @@ async def list_public_channels(
     For channels you are already a member of (including private), use list_my_channels.
     """
     data = await client.get_public_channels(
-        team_id=team_id,
+        team_id=resolve_team_id(team_id),
         page=page,
         per_page=per_page,
     )
@@ -53,7 +53,7 @@ async def list_public_channels(
     meta={"capability": Capability.READ},
 )
 async def list_my_channels(
-    team_id: TeamId,
+    team_id: OptionalTeamId = None,
     channel_types: Annotated[
         list[Literal["O", "P", "D", "G"]] | None,
         Field(
@@ -93,7 +93,7 @@ async def list_my_channels(
     Use only_unread=True to get only channels with unread messages.
     For discovering public channels you haven't joined yet, use list_public_channels.
     """
-    data = await client.get_my_channels_with_unreads(team_id=team_id)
+    data = await client.get_my_channels_with_unreads(team_id=resolve_team_id(team_id))
     if channel_types is not None:
         data = [ch for ch in data if ch.get("type") in channel_types]
     result = [ChannelWithUnreads.model_validate(ch) for ch in data]
@@ -127,8 +127,8 @@ async def get_channel(
     meta={"capability": Capability.READ},
 )
 async def get_channel_by_name(
-    team_id: TeamId,
     channel_name: ChannelName,
+    team_id: OptionalTeamId = None,
     client: MattermostClient = Depends(get_client),  # noqa: B008
 ) -> Channel:
     """Get a channel by its name within a team.
@@ -138,7 +138,7 @@ async def get_channel_by_name(
     For lookup by ID, use get_channel instead.
     """
     data = await client.get_channel_by_name(
-        team_id=team_id,
+        team_id=resolve_team_id(team_id),
         name=channel_name,
     )
     return Channel(**data)
@@ -150,9 +150,9 @@ async def get_channel_by_name(
     meta={"capability": Capability.CREATE},
 )
 async def create_channel(  # noqa: PLR0913
-    team_id: TeamId,
     name: ChannelName,
     display_name: Annotated[str, Field(min_length=1, max_length=64, description="Human-readable channel name")],
+    team_id: OptionalTeamId = None,
     channel_type: ChannelType = "O",
     purpose: Annotated[str, Field(max_length=250, description="Channel purpose")] = "",
     header: Annotated[str, Field(max_length=1024, description="Channel header")] = "",
@@ -165,7 +165,7 @@ async def create_channel(  # noqa: PLR0913
     Each call creates a new channel; use get_channel_by_name to check if it exists.
     """
     data = await client.create_channel(
-        team_id=team_id,
+        team_id=resolve_team_id(team_id),
         name=name,
         display_name=display_name,
         channel_type=channel_type,

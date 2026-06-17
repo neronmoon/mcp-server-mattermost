@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .models.common import validate_mattermost_id
+
 
 class AuthMode(str, Enum):
     """Mattermost authentication mode."""
@@ -52,6 +54,7 @@ class Settings(BaseSettings):
         MATTERMOST_LOG_LEVEL: Logging level (default: INFO)
         MATTERMOST_LOG_FORMAT: Log format, 'json' or 'text' (default: json)
         MATTERMOST_API_VERSION: API version (default: v4)
+        MATTERMOST_DEFAULT_TEAM_ID: Default team ID for tools when team_id is omitted
     """
 
     model_config = SettingsConfigDict(
@@ -74,6 +77,10 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", description="Logging level")
     log_format: str = Field(default="json", description="Log format: 'json' or 'text'")
     api_version: str = Field(default="v4", description="Mattermost API version")
+    default_team_id: str | None = Field(
+        default=None,
+        description="Default team ID used when tool calls omit team_id",
+    )
 
     oauth_client_id: str | None = Field(default=None, description="Mattermost OAuth App client ID")
     oauth_client_type: OAuthClientType = Field(
@@ -117,6 +124,14 @@ class Settings(BaseSettings):
             msg = f"Invalid log level: {v}. Must be one of {valid_levels}"
             raise ValueError(msg)
         return upper
+
+    @field_validator("default_team_id")
+    @classmethod
+    def validate_default_team_id(cls, v: str | None) -> str | None:
+        """Normalize and validate default team ID when configured."""
+        if v is None or not v.strip():
+            return None
+        return validate_mattermost_id(v.strip())
 
     @field_validator("log_format")
     @classmethod

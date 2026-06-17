@@ -7,9 +7,9 @@ from fastmcp.tools import tool
 from pydantic import Field
 
 from mcp_server_mattermost.client import MattermostClient
-from mcp_server_mattermost.deps import get_client
+from mcp_server_mattermost.deps import get_client, resolve_team_id
 from mcp_server_mattermost.enums import Capability, ToolTag
-from mcp_server_mattermost.models import Team, TeamId, TeamMember
+from mcp_server_mattermost.models import OptionalTeamId, Team, TeamMember
 
 
 @tool(
@@ -35,7 +35,7 @@ async def list_teams(
     meta={"capability": Capability.READ},
 )
 async def get_team(
-    team_id: TeamId,
+    team_id: OptionalTeamId = None,
     client: MattermostClient = Depends(get_client),  # noqa: B008
 ) -> Team:
     """Get team details by ID.
@@ -43,7 +43,7 @@ async def get_team(
     Returns team name, description, and settings.
     Use when you have the team ID and need detailed information.
     """
-    data = await client.get_team(team_id=team_id)
+    data = await client.get_team(team_id=resolve_team_id(team_id))
     return Team(**data)
 
 
@@ -53,7 +53,7 @@ async def get_team(
     meta={"capability": Capability.READ},
 )
 async def get_team_members(
-    team_id: TeamId,
+    team_id: OptionalTeamId = None,
     page: Annotated[int, Field(ge=0, description="Page number (0-indexed)")] = 0,
     per_page: Annotated[int, Field(ge=1, le=200, description="Results per page")] = 60,
     client: MattermostClient = Depends(get_client),  # noqa: B008
@@ -64,7 +64,7 @@ async def get_team_members(
     Use to discover users before sending direct messages or mentions.
     """
     data = await client.get_team_members(
-        team_id=team_id,
+        team_id=resolve_team_id(team_id),
         page=page,
         per_page=per_page,
     )

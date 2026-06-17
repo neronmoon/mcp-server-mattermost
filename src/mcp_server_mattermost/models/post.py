@@ -15,14 +15,14 @@ class Post(MattermostResponse):
     edit_at: int = Field(description="Last edit timestamp")
     user_id: str = Field(description="Author user identifier")
     channel_id: str = Field(description="Channel where posted")
-    root_id: str = Field(description="Root post ID if in thread")
-    original_id: str = Field(description="Original post ID if edited")
+    root_id: str = Field(default="", description="Root post ID if in thread")
+    original_id: str = Field(default="", description="Original post ID if edited")
     message: str = Field(description="Post content (supports Markdown)")
-    type: str = Field(description="Post type (empty for regular posts)")
-    hashtags: str = Field(description="Space-separated hashtags")
-    file_ids: list[str] = Field(description="Attached file IDs")
-    pending_post_id: str = Field(description="Client-side pending ID")
-    is_pinned: bool = Field(description="Whether post is pinned")
+    type: str = Field(default="", description="Post type (empty for regular posts)")
+    hashtags: str = Field(default="", description="Space-separated hashtags")
+    file_ids: list[str] = Field(default_factory=list, description="Attached file IDs")
+    pending_post_id: str = Field(default="", description="Client-side pending ID")
+    is_pinned: bool = Field(default=False, description="Whether post is pinned")
 
 
 class PostList(MattermostResponse):
